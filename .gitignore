@@ -1,3 +1,6 @@
+ !data/lancedb/
+   !data/lancedb/*/
+   !data/lancedb/*/*.lance
 # Environment variables
 #.env
 #.env.local
