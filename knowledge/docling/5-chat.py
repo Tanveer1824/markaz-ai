@@ -10,10 +10,20 @@ import numpy as np
 import re
 from typing import Dict, List, Any
 
-DB_PATH = os.getenv("DB_PATH", "data/lancedb")
-TABLE_NAME = os.getenv("TABLE_NAME", "docling") 
 # Load environment variables
 load_dotenv()
+
+# Database path configuration - use absolute path for Streamlit compatibility
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.getenv("DB_PATH", os.path.join(SCRIPT_DIR, "data", "lancedb"))
+TABLE_NAME = os.getenv("TABLE_NAME", "docling")
+
+# Debug: Print paths for troubleshooting (only in development)
+if os.getenv("DEBUG", "false").lower() == "true":
+    print(f"Script directory: {SCRIPT_DIR}")
+    print(f"DB_PATH: {DB_PATH}")
+    print(f"TABLE_NAME: {TABLE_NAME}")
+    print(f"Current working directory: {os.getcwd()}")
 
 # Initialize Azure OpenAI client
 client = AzureOpenAI(
@@ -21,9 +31,6 @@ client = AzureOpenAI(
     api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
 )
-
-# Database path configuration
-DB_PATH = os.getenv("DB_PATH", "data/lancedb")
 
 def azure_openai_embedding(texts):
     """Custom embedding function using Azure OpenAI"""
@@ -48,8 +55,51 @@ def init_db():
     Returns:
         LanceDB table object
     """
-    db = lancedb.connect(DB_PATH)
-    return db.open_table("docling")
+    # Try multiple possible paths
+    possible_paths = [
+        DB_PATH,  # Primary path from environment/config
+        os.path.join(SCRIPT_DIR, "data", "lancedb"),  # Relative to script
+        os.path.join(os.getcwd(), "data", "lancedb"),  # Relative to current working directory
+        os.path.join(os.getcwd(), "knowledge", "docling", "data", "lancedb"),  # From workspace root
+        "knowledge/docling/data/lancedb",  # Alternative relative path
+    ]
+    
+    for path in possible_paths:
+        try:
+            print(f"Trying database path: {path}")
+            if os.path.exists(path):
+                print(f"Found database at: {path}")
+                db = lancedb.connect(path)
+                
+                # List available tables for debugging
+                tables = db.table_names()
+                print(f"Available tables: {tables}")
+                
+                if TABLE_NAME in tables:
+                    print(f"Successfully found table '{TABLE_NAME}'")
+                    return db.open_table(TABLE_NAME)
+                else:
+                    print(f"Table '{TABLE_NAME}' not found in {path}. Available: {tables}")
+                    continue
+            else:
+                print(f"Path does not exist: {path}")
+                continue
+                
+        except Exception as e:
+            print(f"Error with path {path}: {str(e)}")
+            continue
+    
+    # If we get here, none of the paths worked
+    st.error("❌ Failed to find database in any of the expected locations:")
+    for path in possible_paths:
+        st.error(f"  - {path}")
+    
+    st.info(f"Current working directory: {os.getcwd()}")
+    st.info(f"Script directory: {SCRIPT_DIR}")
+    st.info("💡 **Solution**: Set the DB_PATH environment variable to the correct path:")
+    st.info(f"   `DB_PATH={os.path.join(SCRIPT_DIR, 'data', 'lancedb')}`")
+    st.info("   Or run Streamlit from the knowledge/docling directory.")
+    return None
 
 
 def get_context(query: str, table, num_results: int = 5) -> str:
@@ -615,6 +665,11 @@ if "messages" not in st.session_state:
 # Initialize database connection
 table = init_db()
 
+# Check if database was initialized successfully
+if table is None:
+    st.error("❌ Failed to initialize database. Please check the configuration and ensure the LanceDB table exists.")
+    st.info("Make sure the 'docling' table exists in the data/lancedb directory.")
+    st.stop()
 
 # Display chat messages
 if st.session_state.messages:
