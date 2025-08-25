@@ -10,6 +10,8 @@ import numpy as np
 import re
 from typing import Dict, List, Any
 
+DB_PATH = os.getenv("DB_PATH", "data/lancedb")
+TABLE_NAME = os.getenv("TABLE_NAME", "docling") 
 # Load environment variables
 load_dotenv()
 
