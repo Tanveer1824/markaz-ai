@@ -1,0 +1,2 @@
+*.lance filter=lfs diff=lfs merge=lfs -text
+data/lancedb/** filter=lfs diff=lfs merge=lfs -text
